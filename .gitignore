@@ -1,0 +1,4 @@
+.vs/*
+SiteChecker/bin/*
+SiteChecker/obj/*
+packages/*
