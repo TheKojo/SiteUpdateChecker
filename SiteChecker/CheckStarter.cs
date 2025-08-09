@@ -5,13 +5,14 @@ using System.Text;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using System.Threading;
+using System.Text.RegularExpressions;
 
 namespace SiteChecker
 {
     class CheckStarter
     {
 
-        public static IConfigurationRoot configuration  = new ConfigurationBuilder()
+        public static IConfigurationRoot configuration = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetParent(AppContext.BaseDirectory).FullName)
                 .AddJsonFile("appsettings.json", false)
                 .Build();
@@ -28,6 +29,10 @@ namespace SiteChecker
         static StreamWriter w = File.AppendText("D:\\sitecheck_log.txt");
         //static StreamReader r = File.OpenText("D:\\sitecheck_log.txt");
 
+        static bool countMode = true;
+        static string stringToCount = "Sold-out";
+        static bool useAlarm = true;
+
         static void Main(string[] args)
         {
             string[,] conArr = new string[11, 1];
@@ -38,7 +43,7 @@ namespace SiteChecker
                 {
                     checkSites();
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
                     Console.WriteLine(ex.Message);
                     Console.WriteLine(ex.StackTrace);
@@ -54,10 +59,12 @@ namespace SiteChecker
                 string pathPrev = dir + labels[idx] + "_prev.txt";
                 string urlAddress = websites[idx];
                 string currText = "";
+                string currOccurrences = "";
                 string inbetweenIndicator = " ... ";
                 if (File.Exists(path))
                 {
                     currText = File.ReadAllText(path);
+                    currOccurrences = currText;
                 }
                 Console.WriteLine(DateTime.Now.ToString());
                 Console.WriteLine("Accessing URL: " + urlAddress);
@@ -67,6 +74,19 @@ namespace SiteChecker
                     HttpWebRequest request = (HttpWebRequest)WebRequest.Create(urlAddress);
                     request.UseDefaultCredentials = true;
                     request.UserAgent = configuration["user_agent"];
+                    request.CookieContainer = new CookieContainer();
+
+                    if (urlAddress.Contains("bigbad"))
+                    {
+                        string CookieStr = configuration["cookie"];
+                        CookieContainer cookiecontainer = new CookieContainer();
+                        string[] cookies = CookieStr.Split(';');
+                        foreach (string cookie in cookies)
+                            cookiecontainer.SetCookies(new Uri(urlAddress), cookie);
+                        request.CookieContainer = cookiecontainer;
+                        request.Accept = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
+                    }
+
                     HttpWebResponse response = (HttpWebResponse)request.GetResponse();
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
@@ -81,91 +101,116 @@ namespace SiteChecker
                             readStream = new StreamReader(receiveStream, Encoding.GetEncoding(response.CharacterSet));
                         }
                         string data = readStream.ReadToEnd();
-
-                        string[] removals = exclusions[idx].Split(new string[] { " , " }, System.StringSplitOptions.None);
-                        for (int j = 0; j < removals.Length; j++)
+                        if (countMode)
                         {
-                            if (removals[j] != "")
+                            string numOccurrences = Regex.Matches(data, stringToCount).Count + "";
+                            bool sameHtml = currOccurrences == numOccurrences;
+                            Console.WriteLine("Same HTML as previous check? : " + sameHtml + ", counted occurrences is: " + numOccurrences);
+                            System.Media.SoundPlayer player = new System.Media.SoundPlayer(sounds[idx]);
+                            if (!sameHtml)
                             {
-                                int inbetweenLoc = removals[j].IndexOf(inbetweenIndicator);
-                                if (inbetweenLoc != -1)
+                                if (useAlarm)
                                 {
-                                    string startStringToRemove = removals[j].Substring(0, inbetweenLoc);
-                                    string endStringToRemove = removals[j].Substring(inbetweenLoc + inbetweenIndicator.Length);
-                                    int removeStart = 0;
-                                    int removeEnd = 0;
-                                    int removeLength = 0;
-                                    do
-                                    {
-                                        if (startStringToRemove == "hostname\":")
-                                        {
-                                            string test = "";
-                                        }
-                                        removeStart = data.IndexOf(startStringToRemove);
-                                        removeEnd = -1;
-                                        if (removeStart > -1)
-                                        {
-                                            removeEnd = data.IndexOf(endStringToRemove, removeStart) + endStringToRemove.Length;
-                                        }                                        
-                                        removeLength = removeEnd - removeStart;
-                                        if (removeStart != -1 && removeEnd != -1 && removeLength > 0)
-                                        {
-                                            //Console.Write(removeLength);
-                                            data = data.Remove(removeStart, removeLength);
-                                        }
-                                    } while (removeStart != -1 && removeEnd != -1 && removeLength > 0);
-
+                                    RingAlarm(idx);
+                                    //player.SoundLocation = alarms[idx];
+                                    //player.PlayLooping();
                                 }
                                 else
                                 {
-                                    string stringToRemove = removals[j];
-                                    data = data.Replace(stringToRemove, "");
+                                    player.Play();
                                 }
-
+                                File.WriteAllText(path, numOccurrences);
+                                File.WriteAllText(pathPrev, currOccurrences);
+                                Log("Update for " + labels[idx], w);
                             }
                         }
-
-                        string[] adds = inclusions[idx].Split(new string[] { " , " }, System.StringSplitOptions.None);
-                        for (int j = 0; j < adds.Length; j++)
+                        else
                         {
-                            if (adds[j] != "")
+                            string[] removals = exclusions[idx].Split(new string[] { " , " }, System.StringSplitOptions.None);
+                            for (int j = 0; j < removals.Length; j++)
                             {
-                                int inbetweenLoc = adds[j].IndexOf(inbetweenIndicator);
-                                if (inbetweenLoc != -1)
+                                if (removals[j] != "")
                                 {
-                                    string startStringToRemove = adds[j].Substring(0, inbetweenLoc);
-                                    string endStringToRemove = adds[j].Substring(inbetweenLoc + inbetweenIndicator.Length);
-                                    int searchStart = data.IndexOf(startStringToRemove);
-                                    int searchEnd = data.IndexOf(endStringToRemove, searchStart);
-                                    int searchLength = searchEnd - searchStart;
-                                    if (searchStart != -1 && searchEnd != -1 && searchLength > 0)
+                                    int inbetweenLoc = removals[j].IndexOf(inbetweenIndicator);
+                                    if (inbetweenLoc != -1)
                                     {
-                                        data = data.Substring(searchStart, searchLength);
+                                        string startStringToRemove = removals[j].Substring(0, inbetweenLoc);
+                                        string endStringToRemove = removals[j].Substring(inbetweenLoc + inbetweenIndicator.Length);
+                                        int removeStart = 0;
+                                        int removeEnd = 0;
+                                        int removeLength = 0;
+                                        do
+                                        {
+                                            if (startStringToRemove == "hostname\":")
+                                            {
+                                                string test = "";
+                                            }
+                                            removeStart = data.IndexOf(startStringToRemove);
+                                            removeEnd = -1;
+                                            if (removeStart > -1)
+                                            {
+                                                removeEnd = data.IndexOf(endStringToRemove, removeStart) + endStringToRemove.Length;
+                                            }
+                                            removeLength = removeEnd - removeStart;
+                                            if (removeStart != -1 && removeEnd != -1 && removeLength > 0)
+                                            {
+                                                //Console.Write(removeLength);
+                                                data = data.Remove(removeStart, removeLength);
+                                            }
+                                        } while (removeStart != -1 && removeEnd != -1 && removeLength > 0);
+
+                                    }
+                                    else
+                                    {
+                                        string stringToRemove = removals[j];
+                                        data = data.Replace(stringToRemove, "");
+                                    }
+
+                                }
+                            }
+
+                            string[] adds = inclusions[idx].Split(new string[] { " , " }, System.StringSplitOptions.None);
+                            for (int j = 0; j < adds.Length; j++)
+                            {
+                                if (adds[j] != "")
+                                {
+                                    int inbetweenLoc = adds[j].IndexOf(inbetweenIndicator);
+                                    if (inbetweenLoc != -1)
+                                    {
+                                        string startStringToRemove = adds[j].Substring(0, inbetweenLoc);
+                                        string endStringToRemove = adds[j].Substring(inbetweenLoc + inbetweenIndicator.Length);
+                                        int searchStart = data.IndexOf(startStringToRemove);
+                                        int searchEnd = data.IndexOf(endStringToRemove, searchStart);
+                                        int searchLength = searchEnd - searchStart;
+                                        if (searchStart != -1 && searchEnd != -1 && searchLength > 0)
+                                        {
+                                            data = data.Substring(searchStart, searchLength);
+                                        }
                                     }
                                 }
                             }
-                        }
+                            //Console.WriteLine(data.Substring(0, 20) + "...");
 
-                        Console.WriteLine(data.Substring(0, 20) + "...");
+                            bool sameHtml = currText == data;
+                            Console.WriteLine("Same HTML as previous check? : " + sameHtml);
+                            System.Media.SoundPlayer player = new System.Media.SoundPlayer(sounds[idx]);
+                            if (!sameHtml)
+                            {
+                                if (alarms[idx] != "")
+                                {
+                                    RingAlarm(idx);
+                                    //player.SoundLocation = alarms[idx];
+                                    //player.PlayLooping();
+                                }
+                                else
+                                {
+                                    player.Play();
+                                }
+                                File.WriteAllText(path, data);
+                                File.WriteAllText(pathPrev, currText);
+                                Log("Update for " + labels[idx], w);
+                            }
 
-                        bool sameHtml = currText == data;
-                        Console.WriteLine("Same HTML as previous check? : " + sameHtml);
-                        System.Media.SoundPlayer player = new System.Media.SoundPlayer(sounds[idx]);
-                        if (!sameHtml)
-                        {
-                            if (alarms[idx] != "")
-                            {
-                                RingAlarm(idx);
-                                //player.SoundLocation = alarms[idx];
-                                //player.PlayLooping();
-                            }
-                            else
-                            {
-                                player.Play();
-                            }
-                            File.WriteAllText(path, data);
-                            File.WriteAllText(pathPrev, currText);
-                            Log("Update for "+ labels[idx], w);
                         }
                         response.Close();
                         readStream.Close();
@@ -176,7 +221,7 @@ namespace SiteChecker
                 catch (Exception ex)
                 {
                     System.Media.SoundPlayer playerErr = new System.Media.SoundPlayer(configuration["error_sound"]);
-                    //playerErr.Play();
+                    playerErr.Play();
                     Console.WriteLine("!!!!!!!!!! ERROR !!!!!!!!!!");
                     Console.WriteLine(ex.Message);
                     Console.WriteLine(ex.StackTrace);
@@ -190,13 +235,13 @@ namespace SiteChecker
         static void RingAlarm(int idx)
         {
             System.Media.SoundPlayer player = new System.Media.SoundPlayer(sounds[idx]);
-            player.SoundLocation = alarms[idx];
+            //player.SoundLocation = alarms[idx];
             player.PlayLooping();
             try
             {
-                Reader.ReadLine(alarmTime*1000);
+                Reader.ReadLine(alarmTime * 1000);
             }
-            catch(TimeoutException)
+            catch (TimeoutException)
             {
                 Console.WriteLine("Alarm timeout");
             }
