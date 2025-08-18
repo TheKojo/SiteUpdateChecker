@@ -14,6 +14,8 @@ namespace SiteChecker
 
         public string Class { get; set; }
 
+        public string TextContents { get; set; }
+
         public List<HTMLElement> Children { get; set; } = new List<HTMLElement>();   
 
         public bool isOpen { get; set; }   

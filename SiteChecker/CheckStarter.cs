@@ -150,13 +150,19 @@ namespace SiteChecker
                 HTMLElement currentNode = new HTMLElement();
                 string tagName = parseTagName(htmlData.Data);
                 string className = parseClassName(htmlData.Data);
+                string text = parseText(htmlData.Data);
                 currentNode.TagType = tagName;
                 currentNode.Class = className;
-                Console.WriteLine(currentNode.TagType);
+                currentNode.TextContents = text;
+                Console.WriteLine(currentNode.TextContents);
                 if (tagName == "html") {
                     var y = 1;
                 }
                 if (tagName == "")
+                {
+                    var y = 1;
+                }
+                if (text.Contains("Ultra Magnus"))
                 {
                     var y = 1;
                 }
@@ -231,6 +237,25 @@ namespace SiteChecker
                     ret += data[i];
                 }
                 return ret;
+            }
+
+            static string parseText(string data)
+            {
+                string ret = "";
+                int beginTagLocation = data.IndexOf(">") + 1;
+                int endTagLocation = data.IndexOf("<");
+
+                //Build class name until next quote
+                if (endTagLocation > beginTagLocation)
+                {
+                    ret = data.Substring(beginTagLocation, endTagLocation - beginTagLocation);
+                }
+                return cleanText(ret);
+            }
+
+            static string cleanText(string data)
+            {
+                return data.Replace("\n", "").Replace("\t","").Trim();
             }
 
             static void RingAlarm(int idx)
