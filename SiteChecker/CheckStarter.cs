@@ -30,7 +30,7 @@ namespace SiteChecker
                     .Build();
 
             static string dir = configuration["output_directory"];
-            static int seconds = configuration.GetSection("wait_seconds").Get<int>();
+            static int waitSeconds = configuration.GetSection("wait_seconds").Get<int>();
             static string[] configWebsites = configuration.GetSection("websites").Get<string[]>();
             static string[] configLabels = configuration.GetSection("labels").Get<string[]>();
             static string[] configSounds = configuration.GetSection("alert_sound").Get<string[]>();
@@ -41,6 +41,8 @@ namespace SiteChecker
             static List<Website> websites = new List<Website>();
             static HashSet<string> TagsWithNoClosing = new HashSet<string>() { "br", "meta", "link", "input", "!--", "img"};
             static HashSet<string> TagsToSkip = new HashSet<string>() { "script" };
+            static HashSet<string> WebProducts = new HashSet<string>();
+            static bool newInfoFound = false;
 
             static void Main(string[] args)
             {
@@ -52,7 +54,7 @@ namespace SiteChecker
                     //{
                         initWebsites();
                         checkSites();
-                        System.Threading.Thread.Sleep(seconds * 1000);
+                        System.Threading.Thread.Sleep(waitSeconds * 1000);
                     /*}
                     catch (Exception ex)
                     {
@@ -115,7 +117,11 @@ namespace SiteChecker
                             HTMLElement htmlNode = new HTMLElement();
                             htmlNode.TagType = "html";
                             HTMLElement htmlData = parseHTMLData(new HTMLData(data));
-                            var test = 1;
+                            if (newInfoFound)
+                            {
+                                RingAlarm(site.AlertSoundPath);
+                            }
+                            newInfoFound = false;
                         }
                     //}
                     /*catch (Exception ex)
@@ -154,7 +160,7 @@ namespace SiteChecker
                 currentNode.TagType = tagName;
                 currentNode.Class = className;
                 currentNode.TextContents = text;
-                Console.WriteLine(currentNode.TextContents);
+                Console.WriteLine(currentNode.TagType + " - " + currentNode.TextContents);
                 if (tagName == "html") {
                     var y = 1;
                 }
@@ -165,6 +171,11 @@ namespace SiteChecker
                 if (text.Contains("Ultra Magnus"))
                 {
                     var y = 1;
+                }
+                if (currentNode.TagType == "a" && !WebProducts.Contains(currentNode.TextContents))
+                {
+                    WebProducts.Add(currentNode.TextContents);
+                    newInfoFound = true;
                 }
 
                 //No expected closing tag and therefore has no children, return node and continue
@@ -211,7 +222,7 @@ namespace SiteChecker
                         ret += data[i];
                     }
                 }
-                return ret;
+                return ret.Trim();
             }
 
             static string parseClassName(string data)
@@ -236,7 +247,7 @@ namespace SiteChecker
                     }
                     ret += data[i];
                 }
-                return ret;
+                return ret.Trim();
             }
 
             static string parseText(string data)
@@ -258,10 +269,10 @@ namespace SiteChecker
                 return data.Replace("\n", "").Replace("\t","").Trim();
             }
 
-            static void RingAlarm(int idx)
+            static void RingAlarm(string soundFilePath)
             {
-                System.Media.SoundPlayer player = new System.Media.SoundPlayer(configSounds[idx]);
-                player.SoundLocation = configAlarms[idx];
+                System.Media.SoundPlayer player = new System.Media.SoundPlayer(soundFilePath);
+                player.SoundLocation = soundFilePath;
                 player.PlayLooping();
                 try
                 {
