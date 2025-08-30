@@ -18,6 +18,7 @@ namespace SiteChecker
     using Newtonsoft.Json;
     using System.Threading;
     using System.Collections.Generic;
+    using System.Linq;
 
     namespace SiteChecker
     {
@@ -34,6 +35,7 @@ namespace SiteChecker
             static string[] configWebsites = configuration.GetSection("websites").Get<string[]>();
             static string[] configCookies = configuration.GetSection("cookies").Get<string[]>();
             static string[] configLabels = configuration.GetSection("labels").Get<string[]>();
+            static string[] configKeywords = configuration.GetSection("keywords").Get<string[]>();
             static string[] configSounds = configuration.GetSection("alert_sound").Get<string[]>();
             static string[] configAlarms = configuration.GetSection("alarm").Get<string[]>();
             static int alarmTime = configuration.GetSection("alarm_seconds").Get<int>();
@@ -44,6 +46,7 @@ namespace SiteChecker
             static HashSet<string> TagsToSkip = new HashSet<string>() { "script" , "style"};
             static HashSet<string> WebProducts = new HashSet<string>();
             static List<string> newInfoFound = new List<string>();
+            static List<string> Keywords = configKeywords.ToList();
 
             static void Main(string[] args)
             {
@@ -178,7 +181,7 @@ namespace SiteChecker
                 {
                     var y = 1;
                 }
-                if (currentNode.TagType == "a" && (currentNode.TextContents.ToLower().Contains("takara") || currentNode.TextContents.ToLower().Contains("fansproject")) && !WebProducts.Contains(currentNode.TextContents))
+                if (currentNode.TagType == "a" && findKeywords(currentNode.TextContents) && !WebProducts.Contains(currentNode.TextContents))
                 {
                     WebProducts.Add(currentNode.TextContents);
                     newInfoFound.Add(currentNode.TextContents);
@@ -211,6 +214,16 @@ namespace SiteChecker
                     htmlData.Data = trimUntil(htmlData.Data, "<");
                 }
                 return currentNode;
+            }
+
+            static bool findKeywords(string nodeText)
+            {
+                foreach (string keyword in Keywords) { 
+                    if (nodeText.ToLower().Contains(keyword.ToLower())) { 
+                            return true; 
+                    }    
+                }
+                return false;
             }
 
             static string parseTagName(string data)
