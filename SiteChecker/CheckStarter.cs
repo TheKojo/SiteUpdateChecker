@@ -39,14 +39,13 @@ namespace SiteChecker
             static string[] configSounds = configuration.GetSection("alert_sound").Get<string[]>();
             static string[] configAlarms = configuration.GetSection("alarm").Get<string[]>();
             static int alarmTime = configuration.GetSection("alarm_seconds").Get<int>();
-            static StreamWriter w = File.AppendText("D:\\sitecheck_log.txt");
-            //static StreamReader r = File.OpenText("D:\\sitecheck_log.txt");
             static List<Website> websites = new List<Website>();
             static HashSet<string> TagsWithNoClosing = new HashSet<string>() { "br", "meta", "link", "input", "!--", "img"};
             static HashSet<string> TagsToSkip = new HashSet<string>() { "script" , "style"};
             static HashSet<string> WebProducts = new HashSet<string>();
             static List<string> newInfoFound = new List<string>();
             static List<string> Keywords = configKeywords.ToList();
+            static bool isInitializing = true;
 
             static void Main(string[] args)
             {
@@ -121,12 +120,13 @@ namespace SiteChecker
                             HTMLElement htmlNode = new HTMLElement();
                             htmlNode.TagType = "html";
                             HTMLElement htmlData = parseHTMLData(new HTMLData(data));
-                            if (newInfoFound.Count > 0)
+                            if (newInfoFound.Count > 0 && !isInitializing)
                             {
                                 Console.WriteLine("New info found!!!");
                                 foreach (string info in newInfoFound)
                                 {
                                     Console.WriteLine(info);
+                                    Log(info);
                                 }
                                 RingAlarm(site.AlertSoundPath);
                             }
@@ -141,9 +141,14 @@ namespace SiteChecker
                         Console.WriteLine(ex.Message);
                         Console.WriteLine(ex.StackTrace);
                         Console.WriteLine("\n\n======================\n\n");
-                        Log("Error accessing " + site.Name + "; " + ex.Message + ex.StackTrace, w);
+                        Log("Error accessing " + site.Name + "; " + ex.Message + ex.StackTrace);
                     }
                 }
+                if (isInitializing)
+                {
+                    Log("Program started and initialized");
+                }
+                isInitializing = false;
             }
 
             static string trimUntil(string baseStr, string strToFind)
@@ -305,23 +310,17 @@ namespace SiteChecker
                 player.Stop();
             }
 
-            public static void Log(string logMessage, TextWriter w)
+            public static void Log(string logMessage)
             {
-                w.Write("\r\nLog Entry : ");
-                w.WriteLine($"{DateTime.Now.ToLongTimeString()} {DateTime.Now.ToLongDateString()}");
-                w.WriteLine("  :");
-                w.WriteLine($"  :{logMessage}");
-                w.WriteLine("-------------------------------");
-                //DumpLog(r);
-            }
-
-            public static void DumpLog(StreamReader r)
-            {
-                string line;
-                while ((line = r.ReadLine()) != null)
+                using (var fileStream = new FileStream(String.Format("D:\\sitecheck_log.txt"), FileMode.Append))
+                using (var w = new StreamWriter(fileStream))
                 {
-                    Console.WriteLine(line);
+                    w.Write("\r\nLog Entry : ");
+                    w.WriteLine($"{DateTime.Now.ToLongTimeString()} {DateTime.Now.ToLongDateString()}"); 
+                    w.WriteLine($"  :{logMessage}");
+                    w.WriteLine("-------------------------------");
                 }
+
             }
         }
 
